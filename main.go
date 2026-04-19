@@ -90,6 +90,10 @@ func transcribe(audio []byte) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return "", nil
+	}
+
 	result, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -115,8 +119,7 @@ func record(pidFile, audioFile string) {
 		data, _ := os.ReadFile(pidFile)
 		exec.Command("kill", string(bytes.TrimSpace(data))).Run()
 		os.Remove(pidFile)
-
-		notify("Transcribing...")
+		exec.Command("pkill", "-RTMIN+11", "waybar").Start()
 
 		raw, err := os.ReadFile(audioFile)
 		os.Remove(audioFile)
@@ -129,29 +132,24 @@ func record(pidFile, audioFile string) {
 
 		audio, err := preprocess(samples)
 		if err != nil || len(audio) == 0 {
-			notify("Preprocessing failed")
 			return
 		}
 
 		text, err := transcribe(audio)
 		if err != nil || text == "" {
-			notify("Transcription failed")
 			return
 		}
 
 		playSound()
 		pasteText(text)
-		notify(text)
 		return
 	}
 
 	// Start recording
 	playSound()
-	notify("Recording...")
 
 	f, err := os.Create(audioFile)
 	if err != nil {
-		notify("Cannot create audio file")
 		return
 	}
 
@@ -161,12 +159,12 @@ func record(pidFile, audioFile string) {
 	buf := make([]int16, framesPerBuffer)
 	stream, err := portaudio.OpenDefaultStream(channels, 0, sampleRate, framesPerBuffer, buf)
 	if err != nil {
-		notify("Cannot open audio stream")
 		return
 	}
 	stream.Start()
 
 	os.WriteFile(pidFile, []byte(fmt.Sprint(os.Getpid())), 0644)
+	exec.Command("pkill", "-RTMIN+11", "waybar").Start()
 
 	for {
 		if _, err := os.Stat(pidFile); err != nil {
