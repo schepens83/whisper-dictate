@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/gordonklaus/portaudio"
 )
@@ -29,7 +30,7 @@ func notify(msg string) {
 }
 
 func playSound() {
-	exec.Command("pw-play", "--volume", "0.5", sound).Start()
+	exec.Command("pw-play", "--volume", "0.15", sound).Start()
 }
 
 func preprocess(raw []int16) ([]byte, error) {
@@ -101,7 +102,11 @@ func pasteText(text string) {
 	clip := exec.Command("wl-copy")
 	clip.Stdin = bytes.NewBufferString(text)
 	clip.Run()
-	exec.Command("wtype", text).Run()
+	time.Sleep(50 * time.Millisecond)
+	// Shift+Insert: universal paste (works across all apps on Wayland)
+	cmd := exec.Command("ydotool", "key", "42:1", "110:1", "110:0", "42:0")
+	cmd.Env = append(os.Environ(), "YDOTOOL_SOCKET=/run/user/1000/.ydotool_socket")
+	cmd.Run()
 }
 
 func record(pidFile, audioFile string) {
@@ -114,12 +119,11 @@ func record(pidFile, audioFile string) {
 		notify("Transcribing...")
 
 		raw, err := os.ReadFile(audioFile)
-		if err != nil || len(raw) == 0 {
-			notify("Failed to read recording")
+		os.Remove(audioFile)
+		// Require at least 0.5s of audio (16000 Hz * 2 bytes * 0.5s)
+		if err != nil || len(raw) < 16000 {
 			return
 		}
-		os.Remove(audioFile)
-
 		samples := make([]int16, len(raw)/2)
 		binary.Read(bytes.NewReader(raw), binary.LittleEndian, &samples)
 
