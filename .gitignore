@@ -1,0 +1,4 @@
+whisper-dictate
+*.pcm
+*.ogg
+*.wav
