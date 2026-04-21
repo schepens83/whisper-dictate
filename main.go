@@ -140,14 +140,11 @@ func record(pidFile, audioFile string) {
 			return
 		}
 
-		playSound()
 		pasteText(text)
 		return
 	}
 
 	// Start recording
-	playSound()
-
 	f, err := os.Create(audioFile)
 	if err != nil {
 		return
