@@ -161,8 +161,8 @@ func record(pidFile, audioFile string) {
 	stream.Start()
 
 	os.WriteFile(pidFile, []byte(fmt.Sprint(os.Getpid())), 0644)
-	exec.Command("pkill", "-RTMIN+11", "waybar").Start()
 
+	indicatorShown := false
 	for {
 		if _, err := os.Stat(pidFile); err != nil {
 			break
@@ -170,7 +170,16 @@ func record(pidFile, audioFile string) {
 		if err := stream.Read(); err != nil {
 			break
 		}
-		binary.Write(f, binary.LittleEndian, buf)
+		if _, err := os.Stat(pidFile); err != nil {
+			break
+		}
+		if err := binary.Write(f, binary.LittleEndian, buf); err != nil {
+			break
+		}
+		if !indicatorShown {
+			exec.Command("pkill", "-RTMIN+11", "waybar").Start()
+			indicatorShown = true
+		}
 	}
 
 	stream.Stop()
