@@ -33,6 +33,45 @@ func playSound() {
 	exec.Command("pw-play", "--volume", "0.15", sound).Start()
 }
 
+const playersFile = "/tmp/whisper-dictate.players"
+
+// pauseMusic pauses every MPRIS player that is currently Playing and records
+// which ones it paused, so resumeMusic restores exactly those (leaving players
+// that were already paused untouched).
+func pauseMusic() {
+	out, err := exec.Command("playerctl", "-a", "-f", "{{playerInstance}}|{{status}}", "status").Output()
+	if err != nil {
+		return
+	}
+	var paused [][]byte
+	for _, line := range bytes.Split(bytes.TrimSpace(out), []byte("\n")) {
+		parts := bytes.SplitN(line, []byte("|"), 2)
+		if len(parts) != 2 || !bytes.Equal(parts[1], []byte("Playing")) {
+			continue
+		}
+		exec.Command("playerctl", "--player="+string(parts[0]), "pause").Run()
+		paused = append(paused, parts[0])
+	}
+	if len(paused) > 0 {
+		os.WriteFile(playersFile, bytes.Join(paused, []byte("\n")), 0644)
+	}
+}
+
+// resumeMusic plays the players that pauseMusic paused, then clears the state.
+func resumeMusic() {
+	data, err := os.ReadFile(playersFile)
+	if err != nil {
+		return
+	}
+	os.Remove(playersFile)
+	for _, name := range bytes.Split(bytes.TrimSpace(data), []byte("\n")) {
+		if len(name) == 0 {
+			continue
+		}
+		exec.Command("playerctl", "--player="+string(name), "play").Run()
+	}
+}
+
 func preprocess(raw []int16) ([]byte, error) {
 	cmd := exec.Command("ffmpeg", "-y",
 		"-f", "s16le", "-ar", fmt.Sprint(sampleRate), "-ac", "1", "-i", "pipe:0",
@@ -120,6 +159,7 @@ func record(pidFile, audioFile string) {
 		exec.Command("kill", string(bytes.TrimSpace(data))).Run()
 		os.Remove(pidFile)
 		exec.Command("pkill", "-RTMIN+11", "waybar").Start()
+		resumeMusic()
 
 		raw, err := os.ReadFile(audioFile)
 		os.Remove(audioFile)
@@ -161,6 +201,7 @@ func record(pidFile, audioFile string) {
 	stream.Start()
 
 	os.WriteFile(pidFile, []byte(fmt.Sprint(os.Getpid())), 0644)
+	pauseMusic()
 
 	indicatorShown := false
 	for {
