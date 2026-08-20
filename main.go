@@ -39,6 +39,8 @@ const playersFile = "/tmp/whisper-dictate.players"
 // which ones it paused, so resumeMusic restores exactly those (leaving players
 // that were already paused untouched).
 func pauseMusic() {
+	os.Remove(playersFile)
+
 	out, err := exec.Command("playerctl", "-a", "-f", "{{playerInstance}}|{{status}}", "status").Output()
 	if err != nil {
 		return
@@ -49,7 +51,11 @@ func pauseMusic() {
 		if len(parts) != 2 || !bytes.Equal(parts[1], []byte("Playing")) {
 			continue
 		}
-		exec.Command("playerctl", "--player="+string(parts[0]), "pause").Run()
+		// Some MPRIS players advertise Pause but only implement PlayPause.
+		// Since this player was just confirmed Playing, toggling is a pause.
+		if err := exec.Command("playerctl", "--player="+string(parts[0]), "play-pause").Run(); err != nil {
+			continue
+		}
 		paused = append(paused, parts[0])
 	}
 	if len(paused) > 0 {
